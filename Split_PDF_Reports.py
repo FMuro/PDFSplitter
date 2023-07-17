@@ -1,4 +1,4 @@
-import PyPDF2
+import pypdf
 import os
 import time
 import shutil
@@ -12,19 +12,17 @@ import sys
 # Parameters:
 # 1. sourcePDFFile - Source PDF file to split
 # 2. outputPDFDir - Output directory for split files
-# 3. outputNamePrefix - Prefix to append to file names
-# 4. deleteSourcePDF - Delete source PDF file after split (True/False)
 ######################################################################
 
 # Helper class used to map pages numbers to bookmarks
-class BookmarkToPageMap(PyPDF2.PdfFileReader):
+class BookmarkToPageMap(pypdf.PdfReader):
 
     def getDestinationPageNumbers(self):
         def _setup_outline_page_ids(outline, _result=None):
             if _result is None:
                 _result = {}
             for obj in outline:
-                if isinstance(obj, PyPDF2.pdf.Destination):
+                if isinstance(obj, pypdf.generic.Destination):
                     _result[(id(obj), obj.title)] = obj.page.idnum
                 elif isinstance(obj, list):
                     _setup_outline_page_ids(obj, _result)
@@ -35,17 +33,17 @@ class BookmarkToPageMap(PyPDF2.PdfFileReader):
                 _result = {}
             if pages is None:
                 _num_pages = []
-                pages = self.trailer["/Root"].getObject()["/Pages"].getObject()
+                pages = self.trailer["/Root"].get_object()["/Pages"].get_object()
             t = pages["/Type"]
             if t == "/Pages":
                 for page in pages["/Kids"]:
                     _result[page.idnum] = len(_num_pages)
-                    _setup_page_id_to_num(page.getObject(), _result, _num_pages)
+                    _setup_page_id_to_num(page.get_object(), _result, _num_pages)
             elif t == "/Page":
                 _num_pages.append(1)
             return _result
 
-        outline_page_ids = _setup_outline_page_ids(self.getOutlines())
+        outline_page_ids = _setup_outline_page_ids(self.outline)
         page_id_to_page_numbers = _setup_page_id_to_num()
 
         result = {}
@@ -53,26 +51,18 @@ class BookmarkToPageMap(PyPDF2.PdfFileReader):
             result[title] = page_id_to_page_numbers.get(page_idnum, '???')
         return result
 
-def main(arg1, arg2, arg3, arg4):
+def main(arg1, arg2):
     ################
     # Main Program #
     ################
     #Set parameters
     sourcePDFFile = arg1
     outputPDFDir = arg2
-    outputNamePrefix = arg3
-    deleteSourcePDF = arg4
     targetPDFFile = 'temppdfsplitfile.pdf' # Temporary file
-
-    if outputPDFDir:
-        # Append backslash to output dir if necessary
-        if not outputPDFDir.endswith('\\'):
-            outputPDFDir = outputPDFDir + '\\'
 
     print('Parameters:')
     print(sourcePDFFile)
     print(outputPDFDir)
-    print(outputNamePrefix)
     print(targetPDFFile)
 
     #Verify PDF is ready for splitting
@@ -88,11 +78,11 @@ def main(arg1, arg2, arg3, arg4):
 
         #Process file
         pdfFileObj2 = open(targetPDFFile, 'rb')
-        pdfReader = PyPDF2.PdfFileReader(pdfFileObj2)
+        pdfReader = pypdf.PdfReader(pdfFileObj2)
         pdfFileObj = BookmarkToPageMap(pdfFileObj2)
 
         #Get total pages
-        numberOfPages = pdfReader.numPages
+        numberOfPages = len(pdfReader.pages)
         print('PDF # Pages: ' + str(numberOfPages))
 
         i = 0
@@ -115,15 +105,15 @@ def main(arg1, arg2, arg3, arg4):
             else:
                 if newPageName:
                     print('Next Page...')
-                    pdfWriter = PyPDF2.PdfFileWriter()
+                    pdfWriter = pypdf.PdfWriter()
                     page_idx = 0 
                     for i in range(prevPageNum, newPageNum):
-                        pdfPage = pdfReader.getPage(i-1)
-                        pdfWriter.insertPage(pdfPage, page_idx)
+                        pdfPage = pdfReader.pages[i-1]
+                        pdfWriter.insert_page(pdfPage, page_idx)
                         print('Added page to PDF file: ' + prevPageName + ' - Page #: ' + str(i))
                         page_idx+=1
 
-                    pdfFileName = outputNamePrefix + str(str(prevPageName).replace(':','_')).replace('*','_') + '.pdf'
+                    pdfFileName = str(str(prevPageName).replace(':','_')).replace('*','_') + '.pdf'
                     pdfOutputFile = open(outputPDFDir + pdfFileName, 'wb')
                     pdfWriter.write(pdfOutputFile)
                     pdfOutputFile.close()
@@ -135,15 +125,15 @@ def main(arg1, arg2, arg3, arg4):
 
         #Split the last page
         print('Last Page...')
-        pdfWriter = PyPDF2.PdfFileWriter()
+        pdfWriter = pypdf.PdfWriter()
         page_idx = 0 
         for i in range(prevPageNum, numberOfPages + 1):
-            pdfPage = pdfReader.getPage(i-1)
-            pdfWriter.insertPage(pdfPage, page_idx)
+            pdfPage = pdfReader.pages[i-1]
+            pdfWriter.insert_page(pdfPage, page_idx)
             print('Added page to PDF file: ' + prevPageName + ' - Page #: ' + str(i))
             page_idx+=1
         
-        pdfFileName = outputNamePrefix + str(str(prevPageName).replace(':','_')).replace('*','_') + '.pdf'
+        pdfFileName = str(str(prevPageName).replace(':','_')).replace('*','_') + '.pdf'
         pdfOutputFile = open(outputPDFDir + pdfFileName, 'wb')
         pdfWriter.write(pdfOutputFile)
         pdfOutputFile.close()
@@ -154,9 +144,5 @@ def main(arg1, arg2, arg3, arg4):
         # Delete temp file
         os.unlink(targetPDFFile)
 
-        if newPageName:
-            if deleteSourcePDF == True or deleteSourcePDF == "True":
-                os.unlink(sourcePDFFile)
-
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+	main(sys.argv[1], sys.argv[2])
